@@ -1,0 +1,99 @@
+import maya.cmds as cmds
+from maya import OpenMaya as om
+
+
+def fk_to_ik_arm(shoulder_jnt, elbow_jnt, wrist_jnt):
+    for index in shoulder_jnt, elbow_jnt, wrist_jnt:
+        fk_ctrl = index.replace("_JNT", "_FK_CTRL")
+        ik_jnt = index.replace("_JNT", "_IK_JNT")
+        cmds.delete(cmds.parentConstraint(ik_jnt, fk_ctrl, skipTranslate=["x", "y", "z"]))
+    return
+
+
+def fk_to_ik_leg(hip_jnt, knee_jnt, ankle_jnt, toes_jnt):
+    for index in hip_jnt, knee_jnt, ankle_jnt, toes_jnt:
+        fk_ctrl = index.replace("_JNT", "_FK_CTRL")
+        cmds.move(0, 0, 0, fk_ctrl, objectSpace=True)
+        cmds.rotate(0, 0, 0, fk_ctrl, objectSpace=True)
+
+    ankle_fk_ctrl = ankle_jnt.replace("_JNT", "_FK_CTRL")
+    ankle_fk_jnt = ankle_jnt.replace("_JNT", "_FK_JNT")
+    ankle_ik_jnt = ankle_jnt.replace("_JNT", "_IK_JNT")
+    temp_loc = "temp_loc"
+    temp_null = "temp_null"
+    cmds.group(empty=True, name=temp_null)
+    cmds.spaceLocator(name=temp_loc)
+    cmds.delete(cmds.parentConstraint(ankle_fk_jnt, temp_null))
+    cmds.delete(cmds.parentConstraint(ankle_fk_ctrl, temp_loc))
+    cmds.parent(temp_loc, temp_null)
+    cmds.delete(cmds.parentConstraint(ankle_ik_jnt, temp_null))
+
+    for index in hip_jnt, knee_jnt:
+        fk_ctrl = index.replace("_JNT", "_FK_CTRL")
+        ik_jnt = index.replace("_JNT", "_IK_JNT")
+        cmds.delete(cmds.parentConstraint(ik_jnt, fk_ctrl, skipTranslate=["x", "y", "z"]))
+
+    cmds.delete(cmds.parentConstraint(temp_loc, ankle_fk_ctrl, skipTranslate=["x", "y", "z"]))
+    cmds.delete(temp_loc)
+    cmds.delete(temp_null)
+
+    toes_fk_ctrl = toes_jnt.replace("_JNT", "_FK_CTRL")
+    toes_ik_jnt = toes_jnt.replace("_JNT", "_IK_JNT")
+    cmds.delete(cmds.parentConstraint(toes_ik_jnt, toes_fk_ctrl, skipTranslate=["x", "y", "z"]))
+    return
+
+
+def ik_to_fk_arm(shoulder_jnt, elbow_jnt, wrist_jnt):
+    shoulder_fk_jnt = shoulder_jnt.replace("_JNT", "_FK_JNT")
+    elbow_fk_jnt = elbow_jnt.replace("_JNT", "_FK_JNT")
+    wrist_fk_jnt = wrist_jnt.replace("_JNT", "_FK_JNT")
+    shoulder_jnt_vec = om.MVector(*cmds.xform(shoulder_fk_jnt, q=1, ws=1, t=1))
+    elbow_jnt_vec = om.MVector(*cmds.xform(elbow_fk_jnt, q=1, ws=1, t=1))
+    wrist_jnt_vec = om.MVector(*cmds.xform(wrist_fk_jnt, q=1, ws=1, t=1))
+
+    halfarm_vec = (shoulder_jnt_vec - wrist_jnt_vec) / 2 + wrist_jnt_vec
+    pole_vec = (elbow_jnt_vec - halfarm_vec) * 3 + halfarm_vec
+    pv_ctrl = elbow_jnt.replace("_JNT", "PV_CTRL")
+    cmds.xform(pv_ctrl, ws=1, t=[pole_vec.x, pole_vec.y, pole_vec.z])
+    wrist_ik_ctrl = wrist_jnt.replace("_JNT", "_IK_CTRL")
+    cmds.delete(cmds.parentConstraint(wrist_fk_jnt, wrist_ik_ctrl))
+    return
+
+
+def ik_to_fk_leg(hip_jnt, knee_jnt, ankle_jnt, toes_jnt, foot_master_ctrl):
+    ankle_ik_ctrl = ankle_jnt.replace("_JNT", "_IK_CTRL")
+    toes_end_fk_jnt = toes_jnt.replace("_JNT", "_End_FK_JNT")
+    ankle_ik_jnt = ankle_jnt.replace("_JNT", "_IK_JNT")
+    pv_ctrl = knee_jnt.replace("_JNT", "PV_CTRL")
+    hip_fk_jnt = hip_jnt.replace("_JNT", "_FK_JNT")
+    knee_fk_jnt = knee_jnt.replace("_JNT", "_FK_JNT")
+    ankle_fk_jnt = ankle_jnt.replace("_JNT", "_FK_JNT")
+
+    for index in ankle_ik_ctrl, foot_master_ctrl, pv_ctrl:
+        cmds.move(0, 0, 0, index, objectSpace=True)
+        cmds.rotate(0, 0, 0, index, objectSpace=True)
+
+    hip_jnt_vec = om.MVector(*cmds.xform(hip_fk_jnt, q=1, ws=1, t=1))
+    knee_jnt_vec = om.MVector(*cmds.xform(knee_fk_jnt, q=1, ws=1, t=1))
+    ankle_jnt_vec = om.MVector(*cmds.xform(ankle_fk_jnt, q=1, ws=1, t=1))
+    halfarm_vec = (hip_jnt_vec - ankle_jnt_vec) / 2 + ankle_jnt_vec
+    pole_vec = (knee_jnt_vec - halfarm_vec) * 3 + halfarm_vec
+    cmds.xform(pv_ctrl, ws=1, t=[pole_vec.x, pole_vec.y, pole_vec.z])
+
+    temp_loc = "temp_loc"
+    temp_null = "temp_null"
+    cmds.group(empty=True, name=temp_null)
+    cmds.spaceLocator(name=temp_loc)
+    cmds.parent(temp_loc, temp_null)
+    cmds.delete(cmds.parentConstraint(ankle_ik_ctrl, temp_null, skipRotate=["x", "y", "z"]))
+    cmds.delete(cmds.aimConstraint(ankle_ik_jnt, temp_null, aimVector=[1, 0, 0], upVector=[0, 0, 1]))
+    cmds.parentConstraint(ankle_ik_ctrl, temp_null, maintainOffset=True)
+    cmds.delete(cmds.parentConstraint(toes_end_fk_jnt, foot_master_ctrl))
+    cmds.delete(cmds.aimConstraint(ankle_fk_jnt, temp_loc, aimVector=[1, 0, 0],
+                                   upVector=[0, 0, 1], skip=["x", "z"]))
+    loc_rot = cmds.getAttr(f"{temp_loc}.ry")
+    cmds.setAttr(f"{ankle_ik_ctrl}.ry", loc_rot)
+    cmds.delete(temp_loc)
+    cmds.delete(temp_null)
+    return
+
