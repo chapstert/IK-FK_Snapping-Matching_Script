@@ -3,43 +3,57 @@ from maya import OpenMaya as om
 
 
 def fk_to_ik_arm(shoulder_jnt, elbow_jnt, wrist_jnt):
+# function to snap the Shoulder, Elbow and Wrist FK joints to its IK counterparts
+# calling the function requires passing the names of the BIND JOINTS of the shoulder, elbow and wrists
+
     for index in shoulder_jnt, elbow_jnt, wrist_jnt:
         fk_ctrl = index.replace("_JNT", "_FK_CTRL")
         ik_jnt = index.replace("_JNT", "_IK_JNT")
         cmds.delete(cmds.parentConstraint(ik_jnt, fk_ctrl, skipTranslate=["x", "y", "z"]))
+    # loop defines the FK Control names and the IK Joint for it to snap to
+    # parent constraint is created then deleted to snap the fk ctrl to the ik jnt
     return
 
 
 def fk_to_ik_leg(hip_jnt, knee_jnt, ankle_jnt, toes_jnt):
+# The snapping accounts for the reverse foot lock being intergrated into the leg IK system
+# FK and IK leg systems have different joint orientations and different methods must be used
+
     for index in hip_jnt, knee_jnt, ankle_jnt, toes_jnt:
         fk_ctrl = index.replace("_JNT", "_FK_CTRL")
         cmds.move(0, 0, 0, fk_ctrl, objectSpace=True)
         cmds.rotate(0, 0, 0, fk_ctrl, objectSpace=True)
+    # This loops resets the legs to its bind pose to avoid conflicting transforms
 
+    temp_loc = "temp_loc"
+    temp_null = "temp_null"
     ankle_fk_ctrl = ankle_jnt.replace("_JNT", "_FK_CTRL")
     ankle_fk_jnt = ankle_jnt.replace("_JNT", "_FK_JNT")
     ankle_ik_jnt = ankle_jnt.replace("_JNT", "_IK_JNT")
-    temp_loc = "temp_loc"
-    temp_null = "temp_null"
     cmds.group(empty=True, name=temp_null)
     cmds.spaceLocator(name=temp_loc)
     cmds.delete(cmds.parentConstraint(ankle_fk_jnt, temp_null))
     cmds.delete(cmds.parentConstraint(ankle_fk_ctrl, temp_loc))
     cmds.parent(temp_loc, temp_null)
     cmds.delete(cmds.parentConstraint(ankle_ik_jnt, temp_null))
+    # creates a temporary locator for the ankle_fk_ctrl to snap to
+    # using an empty group and a locator accounts for the offset from the FK to the IK ankle joints
 
     for index in hip_jnt, knee_jnt:
         fk_ctrl = index.replace("_JNT", "_FK_CTRL")
         ik_jnt = index.replace("_JNT", "_IK_JNT")
         cmds.delete(cmds.parentConstraint(ik_jnt, fk_ctrl, skipTranslate=["x", "y", "z"]))
+        # aligns the rotations of the Hip and Knee FK Controls to their IK Joint counterparts  
 
     cmds.delete(cmds.parentConstraint(temp_loc, ankle_fk_ctrl, skipTranslate=["x", "y", "z"]))
     cmds.delete(temp_loc)
     cmds.delete(temp_null)
+    # aligns the rotations of the FK Ankle Control to the temporary locator   
 
     toes_fk_ctrl = toes_jnt.replace("_JNT", "_FK_CTRL")
     toes_ik_jnt = toes_jnt.replace("_JNT", "_IK_JNT")
     cmds.delete(cmds.parentConstraint(toes_ik_jnt, toes_fk_ctrl, skipTranslate=["x", "y", "z"]))
+    # aligns the rotations of the toe FK Control to their IK Joint counterpart
     return
 
 
@@ -80,10 +94,8 @@ def ik_to_fk_leg(hip_jnt, knee_jnt, ankle_jnt, toes_jnt, foot_master_ctrl):
     pole_vec = (knee_jnt_vec - halfarm_vec) * 3 + halfarm_vec
     cmds.xform(pv_ctrl, ws=1, t=[pole_vec.x, pole_vec.y, pole_vec.z])
 
-    temp_loc = "temp_loc"
-    temp_null = "temp_null"
-    cmds.group(empty=True, name=temp_null)
-    cmds.spaceLocator(name=temp_loc)
+    cmds.group(empty=True, name="temp_null")
+    cmds.spaceLocator(name="temp_loc")
     cmds.parent(temp_loc, temp_null)
     cmds.delete(cmds.parentConstraint(ankle_ik_ctrl, temp_null, skipRotate=["x", "y", "z"]))
     cmds.delete(cmds.aimConstraint(ankle_ik_jnt, temp_null, aimVector=[1, 0, 0], upVector=[0, 0, 1]))
