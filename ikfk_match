@@ -10,7 +10,7 @@ def fk_to_ik_arm(shoulder_jnt, elbow_jnt, wrist_jnt):
         fk_ctrl = index.replace("_JNT", "_FK_CTRL")
         ik_jnt = index.replace("_JNT", "_IK_JNT")
         cmds.delete(cmds.parentConstraint(ik_jnt, fk_ctrl, skipTranslate=["x", "y", "z"]))
-    # loop defines the FK Control names and the IK Joint for it to snap to
+    # loop defines the FK Control name and the IK Joint for it to snap to
     # parent constraint is created then deleted to snap the fk ctrl to the ik jnt
     return
 
@@ -18,6 +18,7 @@ def fk_to_ik_arm(shoulder_jnt, elbow_jnt, wrist_jnt):
 def fk_to_ik_leg(hip_jnt, knee_jnt, ankle_jnt, toes_jnt):
 # The snapping accounts for the reverse foot lock being intergrated into the leg IK system
 # FK and IK leg systems have different joint orientations and different methods must be used
+# calling the function requires passing the names of the BIND JOINTS of the hips, knee, ankle and toes
 
     for index in hip_jnt, knee_jnt, ankle_jnt, toes_jnt:
         fk_ctrl = index.replace("_JNT", "_FK_CTRL")
@@ -58,23 +59,33 @@ def fk_to_ik_leg(hip_jnt, knee_jnt, ankle_jnt, toes_jnt):
 
 
 def ik_to_fk_arm(shoulder_jnt, elbow_jnt, wrist_jnt):
+    # function to snap the Shoulder, Elbow and Wrist IK joints to its FK counterparts
+    # calling the function requires passing the names of the BIND JOINTS of the shoulder, elbow and wrists
     shoulder_fk_jnt = shoulder_jnt.replace("_JNT", "_FK_JNT")
     elbow_fk_jnt = elbow_jnt.replace("_JNT", "_FK_JNT")
     wrist_fk_jnt = wrist_jnt.replace("_JNT", "_FK_JNT")
     shoulder_jnt_vec = om.MVector(*cmds.xform(shoulder_fk_jnt, q=1, ws=1, t=1))
     elbow_jnt_vec = om.MVector(*cmds.xform(elbow_fk_jnt, q=1, ws=1, t=1))
     wrist_jnt_vec = om.MVector(*cmds.xform(wrist_fk_jnt, q=1, ws=1, t=1))
+    # defines the FK joints and records their vector positions
 
     halfarm_vec = (shoulder_jnt_vec - wrist_jnt_vec) / 2 + wrist_jnt_vec
+    # vector math to define the vector between shoulder JNT and wrist JNT and its halfway point
     pole_vec = (elbow_jnt_vec - halfarm_vec) * 3 + halfarm_vec
     pv_ctrl = elbow_jnt.replace("_JNT", "PV_CTRL")
     cmds.xform(pv_ctrl, ws=1, t=[pole_vec.x, pole_vec.y, pole_vec.z])
+    # extrapolates the halfway point out through the elbow JNT to places the pole vector control
     wrist_ik_ctrl = wrist_jnt.replace("_JNT", "_IK_CTRL")
     cmds.delete(cmds.parentConstraint(wrist_fk_jnt, wrist_ik_ctrl))
+    # snaps the wrist IK control to the FK Joint
+    
     return
 
 
 def ik_to_fk_leg(hip_jnt, knee_jnt, ankle_jnt, toes_jnt, foot_master_ctrl):
+    # function to snap the hips, knees, ankle and toe IK joints to its FK counterparts
+    # the foot_master control is orientated to math the FK joint system 
+    # calling the function requires passing the names of the BIND JOINTS of the hips, knees, ankles, toes and the foot master control
     ankle_ik_ctrl = ankle_jnt.replace("_JNT", "_IK_CTRL")
     toes_end_fk_jnt = toes_jnt.replace("_JNT", "_End_FK_JNT")
     ankle_ik_jnt = ankle_jnt.replace("_JNT", "_IK_JNT")
@@ -82,10 +93,12 @@ def ik_to_fk_leg(hip_jnt, knee_jnt, ankle_jnt, toes_jnt, foot_master_ctrl):
     hip_fk_jnt = hip_jnt.replace("_JNT", "_FK_JNT")
     knee_fk_jnt = knee_jnt.replace("_JNT", "_FK_JNT")
     ankle_fk_jnt = ankle_jnt.replace("_JNT", "_FK_JNT")
+    # defining the names of controls and joints
 
     for index in ankle_ik_ctrl, foot_master_ctrl, pv_ctrl:
         cmds.move(0, 0, 0, index, objectSpace=True)
         cmds.rotate(0, 0, 0, index, objectSpace=True)
+    # resetting IK controls to avoid conflicting tranforms
 
     hip_jnt_vec = om.MVector(*cmds.xform(hip_fk_jnt, q=1, ws=1, t=1))
     knee_jnt_vec = om.MVector(*cmds.xform(knee_fk_jnt, q=1, ws=1, t=1))
@@ -93,18 +106,31 @@ def ik_to_fk_leg(hip_jnt, knee_jnt, ankle_jnt, toes_jnt, foot_master_ctrl):
     halfarm_vec = (hip_jnt_vec - ankle_jnt_vec) / 2 + ankle_jnt_vec
     pole_vec = (knee_jnt_vec - halfarm_vec) * 3 + halfarm_vec
     cmds.xform(pv_ctrl, ws=1, t=[pole_vec.x, pole_vec.y, pole_vec.z])
+    # defining vector positions for the hips, knees and ankles
+    # vector math to define the vector between hip JNT and ankle JNT and its halfway point
+    # extrapolates the halfway point out through the elbow JNT to places the pole vector control
 
-    cmds.group(empty=True, name="temp_null")
-    cmds.spaceLocator(name="temp_loc")
+    # due to the difference in contruction between the FK and IK systems, different methods needs to be used
+    temp_loc = "temp_loc"
+    temp_null = "temp_null"
+    cmds.group(empty=True, name=temp_null)
+    cmds.spaceLocator(name=temp_loc)
     cmds.parent(temp_loc, temp_null)
     cmds.delete(cmds.parentConstraint(ankle_ik_ctrl, temp_null, skipRotate=["x", "y", "z"]))
     cmds.delete(cmds.aimConstraint(ankle_ik_jnt, temp_null, aimVector=[1, 0, 0], upVector=[0, 0, 1]))
     cmds.parentConstraint(ankle_ik_ctrl, temp_null, maintainOffset=True)
+    # creates a locator within an empty group to act as a proxy, the group is parented to the ankle IK Joint
+    # the locator will be used later to prevent conflicting contraints being used on the empty group
+
     cmds.delete(cmds.parentConstraint(toes_end_fk_jnt, foot_master_ctrl))
+    # The foot master control is snapped the end joint of the toe fk joint
     cmds.delete(cmds.aimConstraint(ankle_fk_jnt, temp_loc, aimVector=[1, 0, 0],
                                    upVector=[0, 0, 1], skip=["x", "z"]))
+    # The locator is contrained to match the rotation of the Ankle FK joint 
+
     loc_rot = cmds.getAttr(f"{temp_loc}.ry")
     cmds.setAttr(f"{ankle_ik_ctrl}.ry", loc_rot)
+    # The Y rotation value of the locator is transferred to the Ankle IK control to match its FK counterpart
     cmds.delete(temp_loc)
     cmds.delete(temp_null)
     return
